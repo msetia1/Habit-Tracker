@@ -1,0 +1,100 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid()) @map("user_id")
+  username  String     @unique
+  email     String     @unique
+  password  String     @map("password_hash")
+  createdAt DateTime   @default(now()) @map("created_at")
+  habits    Habit[]
+  goals     Goal[]
+  categories Category[]
+
+  @@map("users")
+}
+
+model Category {
+  id        String   @id @default(uuid()) @map("category_id")
+  userId    String   @map("user_id")
+  name      String
+  color     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  habits    Habit[]
+
+  @@map("categories")
+}
+
+model Habit {
+  id            String      @id @default(uuid()) @map("habit_id")
+  userId        String      @map("user_id")
+  categoryId    String?     @map("category_id")
+  name          String
+  description   String?
+  frequency     String
+  targetCount   Int         @default(1) @map("target_count")
+  startDate     DateTime    @map("start_date")
+  endDate       DateTime?   @map("end_date")
+  reminderTime  DateTime?   @map("reminder_time")
+  active        Boolean     @default(true)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  category      Category?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  habitLogs     HabitLog[]
+  streaks       Streak[]
+
+  @@map("habits")
+}
+
+model HabitLog {
+  id              String   @id @default(uuid()) @map("log_id")
+  habitId         String   @map("habit_id")
+  date            DateTime
+  completedCount  Int      @default(1) @map("completed_count")
+  notes           String?
+  createdAt       DateTime @default(now()) @map("created_at")
+  habit           Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@map("habit_logs")
+}
+
+model Goal {
+  id          String   @id @default(uuid()) @map("goal_id")
+  userId      String   @map("user_id")
+  name        String
+  description String?
+  targetDate  DateTime? @map("target_date")
+  status      String   @default("in_progress")
+  priority    String   @default("medium")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("goals")
+}
+
+model Streak {
+  id              String   @id @default(uuid()) @map("streak_id")
+  habitId         String   @unique @map("habit_id")
+  currentStreak   Int      @default(0) @map("current_streak")
+  longestStreak   Int      @default(0) @map("longest_streak")
+  lastLoggedDate  DateTime? @map("last_logged_date")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  habit           Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@map("streaks")
+}
