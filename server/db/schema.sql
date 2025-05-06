@@ -142,4 +142,172 @@ BEGIN
         last_logged_date = EXCLUDED.last_logged_date,
         updated_at = CURRENT_TIMESTAMP;
 END;
-$$; 
+$$;
+
+-- Create procedure to generate comprehensive habit report
+CREATE OR REPLACE PROCEDURE generate_habit_report(
+    p_user_id UUID,
+    p_start_date DATE,
+    p_end_date DATE,
+    p_category_id UUID DEFAULT NULL
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_report_cursor REFCURSOR := 'report_cursor';
+    v_category_filter TEXT;
+BEGIN
+    -- Prepare category filter
+    IF p_category_id IS NOT NULL THEN
+        v_category_filter := ' AND h.category_id = ''' || p_category_id || '''';
+    ELSE
+        v_category_filter := '';
+    END IF;
+    
+    -- Open cursor for habit report
+    OPEN v_report_cursor FOR EXECUTE
+    'SELECT 
+        h.habit_id,
+        h.name AS habit_name,
+        h.description,
+        h.frequency,
+        h.target_count,
+        h.start_date,
+        h.end_date,
+        c.name AS category_name,
+        c.color AS category_color,
+        COUNT(hl.log_id) AS completion_count,
+        COALESCE(AVG(hl.completed_count), 0) AS avg_completion,
+        COALESCE(SUM(hl.completed_count), 0) AS total_completions,
+        COALESCE(s.current_streak, 0) AS current_streak,
+        COALESCE(s.longest_streak, 0) AS longest_streak,
+        -- Calculate completion rate (completed count / days in period)
+        CASE 
+            WHEN h.frequency = ''daily'' THEN 
+                COALESCE(COUNT(hl.log_id), 0)::float / 
+                GREATEST(1, EXTRACT(DAY FROM AGE(LEAST(CURRENT_DATE, COALESCE(h.end_date, CURRENT_DATE)), 
+                               GREATEST(h.start_date, $2))))
+            WHEN h.frequency = ''weekly'' THEN 
+                COALESCE(COUNT(hl.log_id), 0)::float / 
+                GREATEST(1, EXTRACT(DAY FROM AGE(LEAST(CURRENT_DATE, COALESCE(h.end_date, CURRENT_DATE)), 
+                               GREATEST(h.start_date, $2))) / 7)
+            ELSE 
+                COALESCE(COUNT(hl.log_id), 0)::float / 
+                GREATEST(1, EXTRACT(MONTH FROM AGE(LEAST(CURRENT_DATE, COALESCE(h.end_date, CURRENT_DATE)), 
+                                GREATEST(h.start_date, $2))))
+        END AS completion_rate,
+        -- Days since last completed
+        CASE 
+            WHEN MAX(hl.date) IS NOT NULL THEN 
+                EXTRACT(DAY FROM AGE(CURRENT_DATE, MAX(hl.date)))
+            ELSE NULL
+        END AS days_since_last_completion,
+        -- Recent completion trend (last 7 days vs previous 7 days)
+        (
+            SELECT COUNT(*) 
+            FROM habit_logs hl_recent 
+            WHERE hl_recent.habit_id = h.habit_id 
+            AND hl_recent.date BETWEEN CURRENT_DATE - INTERVAL ''7 days'' AND CURRENT_DATE
+        ) - 
+        (
+            SELECT COUNT(*) 
+            FROM habit_logs hl_previous 
+            WHERE hl_previous.habit_id = h.habit_id 
+            AND hl_previous.date BETWEEN CURRENT_DATE - INTERVAL ''14 days'' AND CURRENT_DATE - INTERVAL ''7 days''
+        ) AS recent_trend
+    FROM habits h
+    LEFT JOIN categories c ON h.category_id = c.category_id
+    LEFT JOIN habit_logs hl ON h.habit_id = hl.habit_id
+        AND hl.date BETWEEN $2 AND $3
+    LEFT JOIN streaks s ON h.habit_id = s.habit_id
+    WHERE h.user_id = $1' 
+    || v_category_filter || 
+    ' GROUP BY h.habit_id, h.name, h.description, h.frequency, h.target_count, 
+        h.start_date, h.end_date, c.name, c.color, s.current_streak, s.longest_streak
+    ORDER BY completion_rate DESC, h.name ASC'
+    USING p_user_id, p_start_date, p_end_date;
+    
+    -- Open cursor for summary statistics
+    OPEN 'summary_cursor' FOR
+    SELECT 
+        COUNT(DISTINCT h.habit_id) AS total_habits,
+        COUNT(DISTINCT CASE WHEN hl.log_id IS NOT NULL THEN h.habit_id END) AS active_habits,
+        COALESCE(AVG(s.current_streak), 0) AS avg_current_streak,
+        COALESCE(MAX(s.longest_streak), 0) AS max_streak,
+        COALESCE(AVG(
+            CASE WHEN h.frequency = 'daily' THEN 
+                COALESCE(COUNT(hl.log_id) OVER (PARTITION BY h.habit_id), 0)::float / 
+                GREATEST(1, EXTRACT(DAY FROM AGE(LEAST(CURRENT_DATE, COALESCE(h.end_date, CURRENT_DATE)), 
+                            GREATEST(h.start_date, p_start_date))))
+            ELSE 0 END
+        ), 0) AS avg_daily_completion_rate,
+        COUNT(DISTINCT c.category_id) AS total_categories,
+        (
+            SELECT c_inner.name
+            FROM categories c_inner
+            JOIN habits h_inner ON c_inner.category_id = h_inner.category_id
+            JOIN habit_logs hl_inner ON h_inner.habit_id = hl_inner.habit_id AND hl_inner.date BETWEEN p_start_date AND p_end_date
+            WHERE c_inner.user_id = p_user_id
+            GROUP BY c_inner.category_id, c_inner.name
+            ORDER BY COUNT(hl_inner.log_id) DESC
+            LIMIT 1
+        ) AS most_active_category
+    FROM habits h
+    LEFT JOIN categories c ON h.category_id = c.category_id
+    LEFT JOIN habit_logs hl ON h.habit_id = hl.habit_id
+        AND hl.date BETWEEN p_start_date AND p_end_date
+    LEFT JOIN streaks s ON h.habit_id = s.habit_id
+    WHERE h.user_id = p_user_id
+    AND (p_category_id IS NULL OR h.category_id = p_category_id);
+END;
+$$;
+
+-- Create function to calculate consistency score for a habit
+CREATE OR REPLACE FUNCTION calculate_consistency_score(
+    p_habit_id UUID,
+    p_start_date DATE,
+    p_end_date DATE
+) RETURNS FLOAT AS $$
+DECLARE
+    v_total_days INTEGER;
+    v_completed_days INTEGER;
+    v_habit_frequency TEXT;
+    v_expected_completions INTEGER;
+    v_actual_completions INTEGER;
+    v_consistency_score FLOAT;
+BEGIN
+    -- Get habit frequency
+    SELECT frequency INTO v_habit_frequency
+    FROM habits
+    WHERE habit_id = p_habit_id;
+    
+    -- Calculate total days in period
+    v_total_days := EXTRACT(DAY FROM AGE(p_end_date, p_start_date)) + 1;
+    
+    -- Calculate expected completions based on frequency
+    IF v_habit_frequency = 'daily' THEN
+        v_expected_completions := v_total_days;
+    ELSIF v_habit_frequency = 'weekly' THEN
+        v_expected_completions := CEIL(v_total_days / 7.0);
+    ELSIF v_habit_frequency = 'monthly' THEN
+        v_expected_completions := CEIL(v_total_days / 30.0);
+    ELSE
+        v_expected_completions := v_total_days;
+    END IF;
+    
+    -- Get actual completions
+    SELECT COUNT(*) INTO v_completed_days
+    FROM habit_logs
+    WHERE habit_id = p_habit_id
+    AND date BETWEEN p_start_date AND p_end_date;
+    
+    -- Calculate consistency score (0-100)
+    IF v_expected_completions > 0 THEN
+        v_consistency_score := (v_completed_days::FLOAT / v_expected_completions) * 100;
+    ELSE
+        v_consistency_score := 0;
+    END IF;
+    
+    RETURN LEAST(100, v_consistency_score);
+END;
+$$ LANGUAGE plpgsql; 

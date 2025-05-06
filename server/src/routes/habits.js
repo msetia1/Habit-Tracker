@@ -6,7 +6,8 @@ const {
     getHabits,
     getHabit,
     updateHabit,
-    deleteHabit
+    deleteHabit,
+    logCompletion
 } = require('../controllers/habitController');
 
 // All routes require authentication
@@ -18,5 +19,6 @@ router.get('/', getHabits);
 router.get('/:id', getHabit);
 router.put('/:id', updateHabit);
 router.delete('/:id', deleteHabit);
+router.post('/:id/log', logCompletion);
 
 module.exports = router; 

@@ -30,9 +30,13 @@ pool.connect((err, client, release) => {
 // Routes
 const authRoutes = require('./routes/auth');
 const habitRoutes = require('./routes/habits');
+const statsRoutes = require('./routes/stats');
+const categoryRoutes = require('./routes/categories');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/habits', habitRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/categories', categoryRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
