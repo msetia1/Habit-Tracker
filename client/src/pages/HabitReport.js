@@ -18,13 +18,12 @@ import {
   TableRow,
   Alert,
   Chip,
-  Divider,
   Card,
   CardContent,
   LinearProgress,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { format, subDays } from 'date-fns';
+import { subDays } from 'date-fns';
 import {
   Search as SearchIcon,
   TrendingUp as TrendingUpIcon,

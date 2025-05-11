@@ -69,7 +69,7 @@ const CategoryManager = () => {
 
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [fetchCategories]);
 
   const fetchCategories = async () => {
     try {

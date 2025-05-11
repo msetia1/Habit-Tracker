@@ -7,7 +7,6 @@ import {
   Paper,
   Card,
   CardContent,
-  CardActions,
   Button,
   Chip,
   CircularProgress,
@@ -37,7 +36,7 @@ import LogHabitDialog from '../components/LogHabitDialog';
 const Dashboard = () => {
   const { currentUser } = useAuth();
   const [habits, setHabits] = useState([]);
-  const [stats, setStats] = useState(null);
+  const [, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [alert, setAlert] = useState({ open: false, message: '', severity: 'success' });
