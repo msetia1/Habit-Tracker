@@ -7,8 +7,18 @@ const app = express();
 console.log('CORS Origin:', process.env.FRONTEND_URL);
 
 // Middleware
-app.use(cors({
-    origin: process.env.FRONTEND_URL || 'https://profound-adventure-production.up.railway.app',
+const allowedOrigins = [
+    'https://profound-adventure-production.up.railway.app' // your actual frontend domain
+  ];
+  
+  app.use(cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization']
