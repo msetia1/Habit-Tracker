@@ -67,9 +67,9 @@ const CategoryManager = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
 
-  const showAlert = (message, severity = 'success') => {
+  const showAlert = useCallback((message, severity = 'success') => {
     setAlert({ open: true, message, severity });
-  };
+  }, []);
   
   const fetchCategories = useCallback(async () => {
     try {
