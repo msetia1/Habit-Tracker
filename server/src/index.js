@@ -23,6 +23,7 @@ const pool = new Pool({
     }
 });
 
+
 // Test database connection
 pool.connect((err, client, release) => {
     if (err) {
