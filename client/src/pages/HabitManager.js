@@ -77,7 +77,7 @@ const HabitManager = () => {
   useEffect(() => {
     fetchHabits();
     fetchCategories();
-  }, [fetchHabits, fetchCategories]);
+  }, []);
 
   const fetchHabits = async () => {
     try {
