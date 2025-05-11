@@ -10,7 +10,10 @@ console.log('CORS Origin:', process.env.FRONTEND_URL);
 const allowedOrigins = [
     'https://profound-adventure-production.up.railway.app' // your actual frontend domain
   ];
-  
+
+  app.options('*', cors()); // handles preflight for all routes
+
+
   app.use(cors({
     origin: function (origin, callback) {
       if (!origin || allowedOrigins.includes(origin)) {
@@ -20,7 +23,7 @@ const allowedOrigins = [
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization']
   }));
 app.use(express.json());
