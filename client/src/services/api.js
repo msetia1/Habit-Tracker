@@ -20,6 +20,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
+
 // Habit API methods
 export const habitAPI = {
   // Get all habits
