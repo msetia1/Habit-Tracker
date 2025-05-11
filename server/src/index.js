@@ -8,19 +8,18 @@ console.log('CORS Origin:', process.env.FRONTEND_URL);
 
 // Middleware
 const allowedOrigins = [
-    'https://profound-adventure-production.up.railway.app' // your actual frontend domain
+    process.env.FRONTEND_URL // your actual frontend domain
   ];
-
-  app.options('*', cors()); // handles preflight for all routes
-
 
   app.use(cors({
     origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
+      if (!origin) return callback(null, true);
+    
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+        return callback(new Error(msg), false);
       }
+      return callback(null, true);
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
