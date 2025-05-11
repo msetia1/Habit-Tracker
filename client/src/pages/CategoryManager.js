@@ -67,11 +67,11 @@ const CategoryManager = () => {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState(null);
 
-  useEffect(() => {
-    fetchCategories();
-  }, [fetchCategories]);
-
-  const fetchCategories = async () => {
+  const showAlert = (message, severity = 'success') => {
+    setAlert({ open: true, message, severity });
+  };
+  
+  const fetchCategories = useCallback(async () => {
     try {
       setLoading(true);
       const response = await categoryAPI.getCategories();
@@ -82,16 +82,17 @@ const CategoryManager = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [showAlert]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, [fetchCategories]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const showAlert = (message, severity = 'success') => {
-    setAlert({ open: true, message, severity });
-  };
 
   const handleCloseAlert = () => {
     setAlert((prev) => ({ ...prev, open: false }));
